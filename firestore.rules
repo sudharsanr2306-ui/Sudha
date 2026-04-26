@@ -1,0 +1,116 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 3. Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isAdmin() {
+      // In this app, we check the user document for the role
+      // Note: This requires a get() which has cost. 
+      // For first turn, we'll use this pattern.
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // --- User Roles & Profiles ---
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin(); // Only admins can list all users
+      
+      allow create: if isSignedIn() 
+        && isValidId(userId)
+        && userId == request.auth.uid
+        && isValidUser(incoming())
+        && incoming().role == 'ambassador'; // Self-sign up default to ambassador
+      
+      allow update: if isSignedIn()
+        && (
+          (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'college'])) ||
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'points', 'badges']))
+        );
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'role'])
+        && data.uid == request.auth.uid
+        && data.name is string && data.name.size() <= 100
+        && data.email is string && data.email.size() <= 150
+        && data.role in ['admin', 'ambassador'];
+    }
+
+    // --- Tasks ---
+    match /tasks/{taskId} {
+      allow read: if isSignedIn();
+      
+      allow create: if isAdmin() 
+        && isValidId(taskId)
+        && isValidTask(incoming());
+      
+      allow update: if isAdmin()
+        && isValidTask(incoming());
+        
+      allow delete: if isAdmin();
+    }
+
+    function isValidTask(data) {
+      return data.keys().hasAll(['title', 'description', 'points', 'status', 'creatorId'])
+        && data.title is string && data.title.size() <= 200
+        && data.description is string && data.description.size() <= 5000
+        && data.points is number && data.points >= 0
+        && data.status in ['active', 'draft', 'completed'];
+    }
+
+    // --- Submissions ---
+    match /submissions/{submissionId} {
+      allow get: if isSignedIn() && (isOwner(existing().ambassadorId) || isAdmin());
+      allow list: if isSignedIn() && (isAdmin() || (request.query.limit <= 100 && resource.data.ambassadorId == request.auth.uid));
+
+      allow create: if isSignedIn()
+        && isValidId(submissionId)
+        && isValidSubmission(incoming())
+        && incoming().ambassadorId == request.auth.uid
+        && get(/databases/$(database)/documents/tasks/$(incoming().taskId)).data.status == 'active';
+
+      allow update: if isSignedIn()
+        && (
+          // Admin reviewing
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'feedback', 'pointsAwarded', 'reviewedAt'])) ||
+          // Ambassador editing their own pending submission
+          (isOwner(existing().ambassadorId) && existing().status == 'pending' && incoming().diff(existing()).affectedKeys().hasOnly(['contentUrl', 'notes']))
+        );
+    }
+
+    function isValidSubmission(data) {
+      return data.keys().hasAll(['taskId', 'ambassadorId', 'status', 'submittedAt'])
+        && data.status in ['pending', 'approved', 'rejected']
+        && data.ambassadorId == request.auth.uid
+        && data.submittedAt == request.time;
+    }
+  }
+}

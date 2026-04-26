@@ -1,0 +1,69 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents an ambassador or an organization manager.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "ambassador"] },
+        "college": { "type": "string" },
+        "points": { "type": "number" },
+        "badges": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email", "role"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "A campaign or task for ambassadors to complete.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "draft", "completed"] },
+        "points": { "type": "number" },
+        "deadline": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["social", "content", "event", "referral"] },
+        "creatorId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "description", "points", "status", "creatorId"]
+    },
+    "Submission": {
+      "title": "Submission",
+      "description": "An ambassador's submission for a specific task.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "taskId": { "type": "string" },
+        "ambassadorId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "contentUrl": { "type": "string" },
+        "notes": { "type": "string" },
+        "feedback": { "type": "string" },
+        "pointsAwarded": { "type": "number" },
+        "submittedAt": { "type": "string", "format": "date-time" },
+        "reviewedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["taskId", "ambassadorId", "status", "submittedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and roles."
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Campaign tasks created by managers."
+    },
+    "/submissions/{submissionId}": {
+      "schema": "Submission",
+      "description": "Global collection of task submissions for review."
+    }
+  }
+}
