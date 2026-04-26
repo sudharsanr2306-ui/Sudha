@@ -41,7 +41,7 @@ service cloud.firestore {
     // --- User Roles & Profiles ---
     match /users/{userId} {
       allow get: if isSignedIn();
-      allow list: if isAdmin(); // Only admins can list all users
+      allow list: if isSignedIn() && (isAdmin() || resource.data.role == 'ambassador'); // Allow leaderboard lookups
       
       allow create: if isSignedIn() 
         && isValidId(userId)
@@ -89,7 +89,7 @@ service cloud.firestore {
     // --- Submissions ---
     match /submissions/{submissionId} {
       allow get: if isSignedIn() && (isOwner(existing().ambassadorId) || isAdmin());
-      allow list: if isSignedIn() && (isAdmin() || (request.query.limit <= 100 && resource.data.ambassadorId == request.auth.uid));
+      allow list: if isSignedIn() && (resource.data.ambassadorId == request.auth.uid || isAdmin());
 
       allow create: if isSignedIn()
         && isValidId(submissionId)
